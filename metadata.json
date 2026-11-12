@@ -1,0 +1,6 @@
+{
+  "name": "UTM Smart Stay",
+  "description": "Centralized student accommodation and community marketplace for Universiti Teknologi Malaysia (UTM) across Johor Bahru, Kuala Lumpur, and Pagoh campuses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,518 @@
+================================================================================
+UTM ACCOMMODATION HUB - DEVELOPER MASTER BRIEF
+Project: SCSE2243 Application Development Project I (UTM MJIIT)
+Team: Azraf, Tanjim, Yahya, Karim
+Theme: Accommodation
+Document purpose: Everything a developer must know BEFORE writing code.
+================================================================================
+
+HOW TO READ THIS DOCUMENT
+- Sections marked [DECIDED] come from the team's proposal, slide deck, or
+  latest direction. Treat them as requirements.
+- Sections marked [SUGGESTED] are recommendations not yet agreed. The team
+  should confirm or change them.
+- Sections marked [OPEN] are unresolved questions that block or shape work.
+- Anything about the old UTMSmart-integrated version is marked [SUPERSEDED].
+
+
+--------------------------------------------------------------------------------
+1. PROJECT SUMMARY [DECIDED]
+--------------------------------------------------------------------------------
+An Agoda / Booking.com style web app where UTM students search, compare, and
+book student accommodation across UTM's campuses (Johor Bahru, Kuala Lumpur,
+Pagoh) through one map-based interface, with a central admin database behind it.
+
+LATEST DIRECTION (overrides earlier documents):
+- The app is NO LONGER an add-on inside UTMSmart or any official university
+  system.
+- It is an OPEN, STANDALONE WEB APP for UTM students.
+- Students sign in with PHONE NUMBER + MATRIC NUMBER.
+- Transit / shuttle features were already dropped. Scope is 100% accommodation.
+
+
+--------------------------------------------------------------------------------
+2. WHAT CHANGED FROM THE ORIGINAL PROPOSAL (READ THIS FIRST)
+--------------------------------------------------------------------------------
+The proposal PDF and slide deck were written for a UTMSmart-integrated module.
+These statements in them are [SUPERSEDED] and must NOT be implemented as written:
+
+  Old statement                                   | Now
+  ------------------------------------------------|-------------------------------
+  "Built into the existing UTMSmart framework"    | Standalone web app
+  "Use existing UTMSmart SSO"                     | Own auth: phone + matric
+  "UTMSmart payment gateway / UTM merchant system"| Independent gateway (Sec. 9)
+  "Built natively inside UTMSmart" (comparison)   | Independent student platform
+  "Our Add-On" (comparison column)                | "Our App"
+  "Zero app fatigue" (unique value)               | No longer true; reword
+
+Consequences developers must design for:
+  1. No official student identity source. Matric numbers cannot be verified
+     against a university database (see Sec. 6).
+  2. No official room inventory feed. Availability data must be entered and
+     maintained inside this system (see Sec. 8 and 10).
+  3. The app collects its own personal data, so it carries its own data-protection
+     responsibility (Sec. 12).
+  4. Payments are handled by the app's own gateway account, so who legally
+     receives the money is an open question (Sec. 15).
+
+
+--------------------------------------------------------------------------------
+3. PROBLEM STATEMENT (THEORY) [DECIDED]
+--------------------------------------------------------------------------------
+Students across UTM campuses face a fragmented, opaque housing market. They
+cannot easily compare on-campus and off-campus options, see real-time
+availability, or see exact pricing in one place. Manual application processes
+lack self-serve convenience, causing student frustration and admin overload.
+
+Five core problem statements (from the deck, Step 3):
+  1. Fragmented Search     - cannot filter colleges across JB, KL, Pagoh in one place
+  2. No Map Discovery      - cannot see college locations/distances on a map
+  3. Hidden Pricing & Slots- rates and availability buried in static files/PDFs
+  4. Manual Booking Friction- paper forms and offline payments delay confirmation
+  5. Scattered Admin Records- no central database for multi-campus inventory
+
+Evidence cited in the deck (student survey; sample size and method are NOT
+stated in the deck, so do not quote these as rigorous statistics):
+  - 18% knew their waitlist position (82% waited blindly)
+  - 12% could track application/repair requests
+  - 61% struggled with location (off-campus distance and transit)
+  - 89% rated a unified add-on "very useful"
+  NOTE: the 89% figure was for a UTMSmart add-on; it should not be assumed to
+  transfer to a standalone app.
+
+Process used to reach the idea (deck): Understand Context, Gather Insights,
+Identify Opportunities, Generate Ideas (brainstorm, mind map, SCAMPER),
+Evaluate & Prioritise (scoring matrix), Define the Idea.
+
+Idea scoring (Impact / Feasibility / Unique = Total):
+  A. Multi-campus filter & map view ...... 5 / 4 / 4 = 13
+  B. Pricing, booking & payment portal ... 5 / 5 / 3 = 13
+  C. Admin master inventory database ..... 4 / 5 / 3 = 12
+  D. Roommate personality matching ....... 2 / 4 / 3 = 9   (OUT of scope)
+  E. IoT smart door locks ................ 3 / 1 / 4 = 8   (OUT of scope)
+Project scope = A + B + C only.
+
+
+--------------------------------------------------------------------------------
+4. USERS AND ROLES
+--------------------------------------------------------------------------------
+Role 1: STUDENT [DECIDED]
+  - Searches, filters, views map and listings, books and pays, tracks booking.
+  - Signs in with phone number + matric number.
+Role 2: ADMIN / HOUSING STAFF [DECIDED]
+  - Manages listings, pricing, room inventory, occupancy across all campuses.
+Role 3: PROPERTY OWNER / MANAGER [OPEN]
+  - Needed if private/off-campus listings are managed by their owners. Decide
+    whether this is a separate role or whether admins enter all data.
+Role 4: GUEST (not signed in) [SUGGESTED]
+  - May browse and search; must sign in to book.
+
+How admins authenticate is NOT defined. Phone + matric does not suit staff.
+[SUGGESTED] email + password with optional 2FA for admins, kept separate from
+the student login.
+
+
+--------------------------------------------------------------------------------
+5. FEATURE REQUIREMENTS
+--------------------------------------------------------------------------------
+5.1 STUDENT FEATURES [DECIDED unless noted]
+  F1  Unified search: choose campus (JB / KL / Pagoh).
+  F2  Filters: price, room type (single / sharing), amenities.
+  F3  Interactive map: exact locations of colleges relative to faculties, bus
+      stops, and campus gates.
+  F4  Property detail page: photo gallery, semester and monthly price breakdown,
+      real-time availability (e.g. "Only 3 rooms left!").
+  F5  Instant booking and payment: pay deposit or full fee online (FPX / credit
+      card).
+  F6  Waitlist with rank visibility (deck: "waitlist rank", "live availability
+      & waitlist"). [DECIDED in deck, mechanics OPEN - see Sec. 10]
+  F7  Booking status tracking (survey showed students could not track status).
+      [SUGGESTED]
+  F8  Sign-in / sign-up with phone + matric. [DECIDED]
+
+5.2 ADMIN FEATURES [DECIDED unless noted]
+  A1  Centralized inventory dashboard across all three campuses.
+  A2  Create/edit/archive listings and room types.
+  A3  Adjust pricing.
+  A4  Live occupancy view and rates.
+  A5  Automatic availability updates when bookings happen (prevents
+      double-booking with no manual work).
+  A6  Booking management: view, confirm, cancel, refund. [SUGGESTED]
+  A7  Waitlist management. [SUGGESTED]
+
+5.3 OUT OF SCOPE [DECIDED]
+  - Shuttle / transit features
+  - Roommate personality matching
+  - IoT smart locks
+  - Maintenance/repair request tracking: the deck lists "Maintenance & Admin"
+    as a friction area, but it is not in the A+B+C scope. [OPEN: confirm excluded]
+
+
+--------------------------------------------------------------------------------
+6. AUTHENTICATION DESIGN (PHONE + MATRIC)
+--------------------------------------------------------------------------------
+Requirement [DECIDED]: sign in with phone number and matric number.
+
+Critical fact: a matric number is an identifier, not a secret and not proof.
+Anyone who knows or guesses one could claim it. Phone + matric alone proves
+nothing about being a UTM student unless one of the following is added.
+
+[SUGGESTED] Minimum viable flow:
+  1. User enters phone number and matric number.
+  2. System sends a one-time password (OTP) to the phone (SMS or WhatsApp).
+  3. User enters OTP. This proves they control the phone number.
+  4. System creates/loads the account and issues a session.
+  - Phone number is the login credential (via OTP). Matric number is stored
+    as a profile attribute and used for booking eligibility.
+
+Uniqueness rules [SUGGESTED]:
+  - One account per phone number.
+  - One account per matric number (unique constraint).
+  - Handle phone number changes and lost phones with a recovery path.
+
+Verification levels (pick one) [OPEN]:
+  Level 0: No verification of student status (OTP only). Simplest; anyone can
+           claim any matric number. Acceptable only if bookings are payment-
+           backed and admins can cancel suspicious ones.
+  Level 1: Also verify a UTM email address via OTP (students have UTM emails).
+           Strong, cheap, and likely the best option.
+  Level 2: Upload student card photo reviewed by admin. Strong but manual.
+  Recommendation: browse freely; require Level 1 (or 2) before a booking can
+  be completed.
+
+Matric number validation:
+  - Validate format with a regex before storing. Example pattern seen in
+    practice: letter + 2-digit year + 2 letters + 4 digits (e.g. A24MJ3028).
+    Confirm the real formats across all UTM campuses (JB, KL, Pagoh, MJIIT)
+    before hardcoding; do not assume one pattern.
+  - Normalise to uppercase and trim whitespace.
+
+Phone number handling:
+  - Store in E.164 format (e.g. +60123456789). Many students are international
+    (Bangladesh and other countries), so do not restrict to +60 numbers.
+  - Use a library (e.g. libphonenumber) for validation.
+
+OTP security [SUGGESTED]:
+  - 6 digits, expires in 5 minutes, single use, store only a hash.
+  - Rate limit per phone and per IP (SMS pumping/abuse is real and costs money).
+  - Lock out after repeated failures.
+  - Session: HTTP-only secure cookie or short-lived JWT with refresh token.
+  - SMS costs money: budget for it or prefer WhatsApp / email OTP.
+
+
+--------------------------------------------------------------------------------
+7. TECHNICAL ARCHITECTURE
+--------------------------------------------------------------------------------
+From the proposal [DECIDED, keep as direction]:
+  - Frontend: web UI with a map SDK (Google Maps API or Mapbox).
+  - Backend + database: relational DB (PostgreSQL or MySQL) with relations
+    between Campuses, Properties/Colleges, Room_Types, Bookings.
+  - Third-party: payment gateway API (Billplz, or similar) for instant payments.
+  - The line "built into the existing UTMSmart framework" is SUPERSEDED.
+
+Recommended concrete stack [SUGGESTED] (team to confirm; choose what the team
+already knows):
+  Frontend : React (Next.js or Vite) + Tailwind; mobile-first responsive design
+  Map      : Mapbox GL JS or Google Maps JS API (or Leaflet + OpenStreetMap
+             for zero cost)
+  Backend  : Node.js (Express/NestJS) or Next.js API routes; REST (or tRPC)
+  Database : PostgreSQL (strongly preferred: transactions, row locking,
+             constraints, PostGIS for geo queries)
+  ORM      : Prisma or Drizzle
+  Auth     : custom OTP flow, or a provider (Firebase Auth phone, Twilio
+             Verify, Supabase Auth)
+  Storage  : S3-compatible bucket / Cloudinary / Supabase Storage for photos
+  Hosting  : Vercel/Render/Railway + managed Postgres (Supabase, Neon)
+  Payments : see Sec. 9
+
+Design priorities:
+  - Mobile-first: students will mostly use phones.
+  - Fast browse experience: browsing pages should be public and cacheable.
+  - Booking path must be transactional and race-condition safe (Sec. 10).
+
+
+--------------------------------------------------------------------------------
+8. DATA MODEL
+--------------------------------------------------------------------------------
+Core entities named in the proposal: Campuses, Properties/Colleges, Room_Types,
+Bookings. The rest is [SUGGESTED] and needed to make the system work.
+
+campuses
+  id, name (Johor Bahru / Kuala Lumpur / Pagoh), code, latitude, longitude
+
+properties            (a college, hostel, or building)
+  id, campus_id (FK), name, short_code (e.g. KTDI), type
+  (on_campus_college | off_campus_partner), description, address,
+  latitude, longitude, gallery (images), amenities, status (active/archived),
+  contact info
+
+room_types
+  id, property_id (FK), name, occupancy (single / sharing / number of beds),
+  gender_restriction (if applicable), amenities, base_price_semester,
+  base_price_month, deposit_amount, total_units, active
+
+rooms (optional, if tracking individual rooms)
+  id, room_type_id (FK), room_label, status
+
+availability / inventory
+  Either computed (total_units minus active bookings per period) or stored as a
+  counter per room_type per term. Define the booking period model first (below).
+
+terms / booking_periods
+  id, name (e.g. Semester 1 2026/2027), start_date, end_date
+
+users (students)
+  id, phone_e164 (UNIQUE), matric_no (UNIQUE), full_name, email,
+  utm_email, utm_email_verified, phone_verified, nationality (optional),
+  gender (only if needed for allocation), created_at
+
+admins
+  id, email, password_hash, role, campus_scope (nullable = all campuses)
+
+bookings
+  id, user_id, room_type_id (or room_id), term_id, status
+  (pending_payment | confirmed | cancelled | expired | refunded | waitlisted),
+  amount_due, amount_paid, created_at, expires_at (hold timer)
+
+payments
+  id, booking_id, gateway, gateway_reference, amount, currency, status,
+  paid_at, raw_webhook_payload
+
+waitlist_entries
+  id, user_id, room_type_id, term_id, position/created_at, status
+
+amenities (lookup) and property_amenities (join)
+audit_log (admin actions on prices, bookings, inventory)
+
+Key constraints:
+  - UNIQUE(users.phone_e164), UNIQUE(users.matric_no)
+  - Prevent a student holding multiple active bookings for the same term
+    (confirm the policy).
+  - Money stored as integers in sen (or DECIMAL), never floating point.
+  - Index lat/long (or use PostGIS) for map queries.
+
+
+--------------------------------------------------------------------------------
+9. PAYMENTS
+--------------------------------------------------------------------------------
+Requirement [DECIDED]: pay deposit or full fee online via FPX or credit card.
+
+Because the app is no longer tied to UTM's merchant system:
+  - [OPEN] Whose merchant account receives the money? Options: the team, a
+    registered business, or the property owners. Most Malaysian gateways
+    require a registered business (SSM) for live payments, so this blocks
+    going live with real money.
+  - For the course project, use the gateway's SANDBOX only. Do not move real
+    funds without resolving the legal/merchant question.
+
+Candidate gateways [SUGGESTED]: Billplz (named in proposal), ToyyibPay, Stripe
+(cards; FPX availability depends on account), SecurePay, Razer Merchant
+Services.
+
+Required implementation behaviours:
+  - Create the booking as pending_payment with a hold timer (e.g. 15 min).
+  - Redirect to gateway; on return, DO NOT trust the browser redirect.
+  - Confirm payment through the gateway's WEBHOOK / callback, verifying its
+    signature, then mark the booking confirmed.
+  - Make webhook handling IDEMPOTENT (gateways resend callbacks).
+  - Expire unpaid holds and release the room automatically (scheduled job).
+  - Keep refund and cancellation rules explicit (policy is [OPEN]).
+  - Store gateway references; never store card data (PCI scope stays with
+    the gateway).
+
+
+--------------------------------------------------------------------------------
+10. AVAILABILITY, DOUBLE-BOOKING AND WAITLIST (THE HARD PART)
+--------------------------------------------------------------------------------
+Stated goal [DECIDED]: bookings automatically update availability and prevent
+double-booking without manual staff intervention.
+
+Implementation guidance [SUGGESTED]:
+  - Do availability decrement and booking creation inside ONE database
+    transaction with row-level locking (SELECT ... FOR UPDATE) or an atomic
+    conditional update (UPDATE ... SET available = available - 1
+    WHERE available > 0). Never check-then-write in application code.
+  - Use a temporary HOLD while the student pays; release on expiry/failure.
+  - Test concurrency: two users booking the last unit at the same instant.
+  - "Only 3 rooms left!" must read from the same source of truth as booking.
+
+Waitlist mechanics [OPEN - decide before building]:
+  - Does the waitlist apply per room type per term?
+  - When a unit frees up, is the next person auto-offered with a time window
+    to pay, or does an admin allocate?
+  - How is the rank displayed and kept fair (FIFO by timestamp)?
+
+Data freshness problem (new because of the pivot):
+  Without a university feed, "real-time availability" is only as accurate as
+  the data admins enter. Decide who is responsible for keeping inventory
+  current. Show a "last updated" timestamp on listings. Be careful: showing
+  "3 rooms left" for a room that is actually full is worse than showing nothing.
+
+Booking-period model [OPEN]: per semester, per month, or both. The proposal
+shows both semester and monthly pricing. Decide how a monthly booking vs a
+semester booking affects inventory.
+
+
+--------------------------------------------------------------------------------
+11. MAP AND SEARCH
+--------------------------------------------------------------------------------
+- Map shows property pins, campus gates, faculties, bus stops [DECIDED].
+- Needs a curated POI dataset: faculty locations, gates, bus stops per campus.
+  This dataset does not exist in the system; someone must collect coordinates.
+- Pin click opens a property card (photo, price from, availability).
+- Sync map and list: filtering updates both; panning the map can filter the list.
+- Distance/walking time from property to a chosen faculty is a strong feature
+  that addresses the 61% location-struggle finding. [SUGGESTED]
+- Cost note: Google Maps and Mapbox have usage-based pricing with free tiers;
+  Leaflet + OpenStreetMap tiles is free. Restrict and protect API keys by
+  domain.
+- Search performance: filter in SQL with proper indexes; paginate results.
+
+
+--------------------------------------------------------------------------------
+12. SECURITY, PRIVACY AND LEGAL
+--------------------------------------------------------------------------------
+Personal data collected: phone, matric number, name, email, booking and
+payment records (and possibly gender/nationality).
+
+- Malaysia's PDPA 2010 applies to commercial transactions involving personal
+  data. Provide a privacy notice, collect only what is needed, get consent,
+  and give a way to delete the account. Confirm applicability with the
+  lecturer for a coursework project, but design as if it applies.
+- Do not expose one student's data to another: authorise every booking/payment
+  endpoint by owner (object-level checks).
+- HTTPS everywhere; hash secrets; never commit API keys; use environment
+  variables.
+- Validate and sanitise all inputs; protect against SQL injection, XSS, CSRF.
+- Rate limit login/OTP, booking, and search endpoints.
+- Admin actions that change prices, bookings, or inventory must be audit
+  logged.
+- Image upload: restrict type and size; scan or re-encode.
+- Be explicit in the UI that this is an independent student-built platform,
+  not an official UTM service. Using UTM names and college names/logos may
+  need permission; confirm before public launch.
+
+
+--------------------------------------------------------------------------------
+13. SEED DATA: LISTINGS FOR INITIAL DATABASE [DECIDED]
+--------------------------------------------------------------------------------
+UTM JOHOR BAHRU (main campus):
+  Kolej Tun Fatimah
+  Kolej Tun Dr. Ismail (KTDI)
+  Kolej Tun Hussein Onn (KTHO)
+  Kolej Datin Seri Endon (KDSE)
+  Kolej Perdana
+  Scholar's Inn
+  Kolej Tun Razak (KTR)
+  Kolej Rahman Putra (KRP)
+  Kolej Tuanku Canselor (KTC)
+  Kolej Dato Onn Jaafar (KDOJ)
+  Kolej 9 & 10
+  K Hotel Sdn. Bhd.
+
+UTM KUALA LUMPUR (city campus):
+  Kolej Kediaman Siswajaya (KSJ)
+  Scholars Inn
+  Residensi UTM KL
+  The Royal Widad
+
+UTM PAGOH (Edu Hub):
+  No listings yet. The schema must allow onboarding Pagoh colleges later
+  without structural changes.
+
+Notes:
+  - The deck claims "16+ colleges"; the list above has 16 entries (12 JB + 4 KL).
+  - Some entries (Scholar's Inn, K Hotel, The Royal Widad, Residensi UTM KL)
+    appear to be private or partner accommodation rather than UTM-run colleges.
+    Model this with a property "type" field. Verify each one.
+  - Prices, room counts, photos, amenities, and coordinates for every listing
+    are NOT provided anywhere. Someone must collect real data, or the team
+    must use clearly labelled placeholder data for the demo.
+
+
+--------------------------------------------------------------------------------
+14. NON-FUNCTIONAL REQUIREMENTS [SUGGESTED]
+--------------------------------------------------------------------------------
+- Responsive, mobile-first; works on low-end phones and slow connections.
+- Accessible: sufficient colour contrast, keyboard navigation, alt text.
+- Performance: listing/search pages load in about 2-3 seconds on mobile.
+- Reliability: booking and payment flows must be recoverable (no lost money,
+  no lost bookings).
+- Observability: error logging, payment/webhook logs, basic monitoring.
+- Data backups for the database.
+- Internationalisation: English first; consider Malay. Support international
+  phone numbers and names.
+- UI direction from the deck: maroon / dark red primary colour (deck uses a
+  deep burgundy with pink accent), clean card-based layout. This is
+  presentation styling, not a requirement.
+- The team studies HCI (SCSM2113 / HCI usability evaluation in this course
+  context), so apply Nielsen's usability heuristics: visibility of system
+  status (booking/waitlist status), error prevention (double booking, wrong
+  payment), recognition over recall, consistency.
+
+
+--------------------------------------------------------------------------------
+15. OPEN QUESTIONS (RESOLVE BEFORE OR EARLY IN DEVELOPMENT)
+--------------------------------------------------------------------------------
+Q1  Student verification level: OTP only, UTM email, or student card review?
+Q2  Who enters and maintains room inventory and prices (admins, owners)?
+Q3  Are private off-campus listings in scope, with owner accounts?
+Q4  Whose merchant account takes payments; sandbox only for the course?
+Q5  Booking period model: per semester, per month, or both?
+Q6  Waitlist mechanics: auto-offer vs admin allocation; hold durations.
+Q7  Cancellation and refund policy.
+Q8  Is maintenance/repair tracking excluded for good?
+Q9  Admin authentication method and admin account creation process.
+Q10 Real data source for prices, photos, coordinates, POIs.
+Q11 Do UTM colleges allow third-party listing and use of names/logos?
+Q12 Course deliverables and deadlines (what must be demonstrated, what
+    documents are marked). Not stated in the provided files.
+Q13 Which stack does the team actually know; decide this first.
+Q14 Does gender-segregated housing need to be modelled (many colleges are
+    gender-specific)? If yes, it affects filtering and booking rules.
+
+
+--------------------------------------------------------------------------------
+16. SUGGESTED BUILD ORDER
+--------------------------------------------------------------------------------
+Phase 0  Decisions: resolve Q1, Q4, Q5, Q13; agree stack; set up repo,
+         environments, CI, linting, .env handling.
+Phase 1  Database schema + migrations + seed script with the Sec. 13 listings
+         (placeholder prices/rooms clearly labelled).
+Phase 2  Public browsing: campus selector, listing grid, filters, property
+         detail page. (Problem statements 1 and 3.)
+Phase 3  Map view: pins, POIs, list/map sync. (Problem statement 2.)
+Phase 4  Authentication: OTP login, profile, verification, sessions.
+Phase 5  Booking engine: holds, transactional availability, booking states,
+         expiry job. Write concurrency tests here.
+Phase 6  Payments: sandbox integration, webhook, idempotency, receipts.
+         (Problem statement 4.)
+Phase 7  Admin dashboard: listings CRUD, pricing, inventory, occupancy,
+         booking management. (Problem statement 5.)
+Phase 8  Waitlist and notifications (SMS/WhatsApp/email for booking and
+         waitlist events).
+Phase 9  Hardening: security review, rate limiting, accessibility, usability
+         testing, performance, documentation, demo data.
+
+
+--------------------------------------------------------------------------------
+17. GLOSSARY
+--------------------------------------------------------------------------------
+Matric number  : UTM student identification number
+Kolej          : residential college (Malay)
+KTDI/KTHO/KTR/KRP/KTC/KDOJ/KDSE/KSJ : abbreviations of UTM colleges (Sec. 13)
+JB / KL / Pagoh: UTM's three campuses
+UTMSmart       : UTM's official student app (no longer a dependency)
+Starrez        : external hostel room-allocation portal named in the deck
+FPX            : Malaysian online banking payment method
+E.164          : international phone number format
+OTP            : one-time password
+SCAMPER        : ideation technique used in the deck
+SSO            : single sign-on (no longer used)
+PDPA           : Malaysia Personal Data Protection Act 2010
+POI            : point of interest on the map
+SSM            : Companies Commission of Malaysia (business registration)
+
+================================================================================
+END OF DOCUMENT
+================================================================================

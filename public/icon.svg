@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="utmGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#990000" />
+      <stop offset="100%" stop-color="#660000" />
+    </linearGradient>
+  </defs>
+  <!-- Background Rounded Square -->
+  <rect width="512" height="512" rx="112" fill="url(#utmGrad)" />
+  <!-- Inner Decorative Shield Border -->
+  <rect x="36" y="36" width="440" height="440" rx="84" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="8" />
+  <!-- Roof / Campus Residence Crest -->
+  <path d="M256 108 L104 224 L140 224 L140 384 C140 397.255 150.745 408 164 408 L220 408 L220 304 L292 304 L292 408 L348 408 C361.255 408 372 397.255 372 384 L372 224 L408 224 Z" fill="#ffffff" />
+  <!-- Gold Accent Window / Smart Stay Star -->
+  <rect x="228" y="196" width="56" height="56" rx="12" fill="#f59e0b" />
+</svg>

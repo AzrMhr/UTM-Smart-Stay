@@ -1,0 +1,402 @@
+================================================================================
+UTM ACCOMMODATION HUB - ADDENDUM 01: ROOM-LEVEL BOOKING
+Applies to: UTM_Accommodation_Hub_Developer_Master_Brief.txt
+Project: SCSE2243 Application Development Project I (UTM MJIIT)
+================================================================================
+
+HOW THIS ADDENDUM RELATES TO THE MASTER BRIEF
+- Read the master brief first. This addendum ADDS to it and, where the two
+  disagree, THIS ADDENDUM WINS.
+- Tags are the same as the master brief:
+  [DECIDED]   stated by the team
+  [SUGGESTED] recommendation, team should confirm
+  [OPEN]      unresolved question
+  [ASSUMED]   my interpretation of something the team said; verify it
+
+Master brief sections changed by this addendum:
+  Sec. 5.1  Student features   -> F4 revised, F9-F12 added (Sec. 6 below)
+  Sec. 5.2  Admin features     -> A8-A10 added (Sec. 7 below)
+  Sec. 8    Data model         -> room-level tables are now REQUIRED (Sec. 4)
+  Sec. 10   Availability       -> inventory is per room, not per room type (Sec. 5)
+  Sec. 13   Seed data          -> needs room-level data per property (Sec. 8)
+  Sec. 15   Open questions     -> Q15-Q24 added (Sec. 10)
+  Sec. 16   Build order        -> phases adjusted (Sec. 11)
+
+
+--------------------------------------------------------------------------------
+1. THE NEW REQUIREMENT [DECIDED]
+--------------------------------------------------------------------------------
+Students must be able to choose a SPECIFIC ROOM, not just a room category.
+
+Required drill-down flow:
+
+   Campus  ->  Kolej / property name  ->  Available rooms  ->  Room options
+
+Example (from the team):
+  - Student clicks a kolej name.
+  - System shows the rooms that are currently available in that building.
+  - Student sees specific options such as:
+        Room 502 (5th floor)
+        Room 401 (4th floor)
+        ...and so on
+  - Student picks one and proceeds to booking and payment.
+
+The same idea applies to Residensi (KL), where options are different kinds of
+units, not just numbered rooms:
+  - Studio
+  - Twin studio
+  - Single room in a 2-bedroom unit
+  - Master room in a 2-bedroom unit
+
+NOTE ON THE NAME: the team wrote "Residensi Gurney KL". The master brief seed
+list says "Residensi UTM KL". [OPEN] Confirm whether these are the same
+property and what the official name is. Use one name everywhere in the app.
+
+
+--------------------------------------------------------------------------------
+2. WHY THIS CHANGES THE DESIGN
+--------------------------------------------------------------------------------
+Before: the system tracked a COUNT of units per room type ("3 single rooms
+left"). Booking decremented the counter.
+
+Now: every physical room is its own record with its own status. A booking
+reserves ONE SPECIFIC ROOM. Counts like "3 rooms left" are DERIVED by counting
+available rooms; they are no longer stored.
+
+Impact on a developer:
+  1. The database needs a rooms table with real room numbers and floors.
+  2. Double-booking prevention moves from "counter > 0" to "this exact room
+     is free" (and can be enforced by the database itself, Sec. 5).
+  3. Someone must supply or import the real room list for every property
+     (Sec. 8). This is the biggest practical task created by this change.
+  4. The UI gains two extra levels (room list, room detail) and needs a way to
+     browse many rooms without overwhelming the student (Sec. 6).
+  5. Apartment-style properties (Residensi) need a UNIT concept, because a
+     "single room in a 2BR" lives inside a unit shared with other people.
+
+
+--------------------------------------------------------------------------------
+3. KEY CONCEPTS
+--------------------------------------------------------------------------------
+PROPERTY   : a kolej, hostel, or residensi (already exists in the master brief).
+BUILDING / BLOCK : optional subdivision of a property (Block A, Tower 2, Wing B).
+FLOOR      : integer on a room (e.g. 5). Not its own table unless needed.
+ROOM       : one physical, individually bookable space with a room number.
+ROOM TYPE  : the category/template a room belongs to (single, twin sharing,
+             studio, twin studio, master room in 2BR...). Holds default price,
+             photos, amenities, description.
+UNIT       : an apartment (e.g. a 2-bedroom unit) that CONTAINS several rooms.
+             Only relevant to apartment-style properties like the residensi.
+BOOKABLE ITEM : the thing a student actually reserves. Decide per property:
+             - a ROOM (kolej single room, a studio)
+             - a BED inside a shared room (kolej twin-sharing) [OPEN, see Q16]
+             - a whole UNIT (renting an entire 2BR) [OPEN, see Q17]
+
+Residensi room types (as described by the team) [ASSUMED interpretations]:
+  Studio          : self-contained single space, 1 occupant [ASSUMED]
+  Twin studio     : studio for 2 occupants / two beds [ASSUMED: confirm]
+  Single room in 2BR : one bedroom in a two-bedroom unit; the other bedroom is
+                    let separately, so the student shares the unit's common
+                    areas with another tenant [ASSUMED]
+  Master room in 2BR : the larger bedroom of a 2BR unit, typically with its own
+                    bathroom [ASSUMED: confirm]
+
+
+--------------------------------------------------------------------------------
+4. UPDATED DATA MODEL [SUGGESTED]
+--------------------------------------------------------------------------------
+Keep the master brief tables (campuses, properties, room_types, users, admins,
+bookings, payments, waitlist_entries, terms, amenities, audit_log). Change or
+add the following.
+
+buildings                       (optional; skip for single-building properties)
+  id, property_id (FK), name, gender_restriction (nullable), notes
+
+units                           (apartment-style properties only)
+  id, property_id (FK), building_id (FK, nullable), unit_no, floor,
+  bedroom_count, unit_label (e.g. "2BR"), notes
+  Example: Residensi tower, floor 12, unit 12-03, 2 bedrooms.
+
+rooms                           (REQUIRED, was optional in master brief)
+  id
+  property_id        FK
+  building_id        FK, nullable
+  unit_id            FK, nullable (set for rooms inside an apartment unit)
+  room_type_id       FK
+  room_no            text, e.g. "502" or "12-03-A"  (UNIQUE within property)
+  floor              integer, e.g. 5
+  capacity           number of occupants/beds the room holds
+  gender_restriction nullable (male | female | none)
+  features           list/JSON: balcony, corner room, view, attached bathroom,
+                     aircond, etc.
+  price_override_semester  nullable (if this room differs from its type price)
+  price_override_month    nullable
+  status             active | maintenance | blocked | archived
+  notes
+
+room_types  (extend the existing table)
+  add: category (kolej_room | studio | twin_studio | apartment_room),
+       is_master_room boolean (for master vs single in 2BR),
+       size_sqm nullable, default_images, default_amenities
+
+room_bookings (new; links a booking to the room it reserves)
+  id, booking_id (FK), room_id (FK), term_id (FK),
+  status mirrors the booking: held | confirmed | cancelled | expired
+
+bookings  (change)
+  A booking now references one or more specific rooms through room_bookings
+  (one row normally; more only if whole-unit booking is allowed, Q17).
+  Remove any "room_type_id only" booking logic.
+
+Bed-level tracking (only if Q16 = bed-level):
+beds
+  id, room_id (FK), bed_label (A / B or Top / Bottom), status
+
+DATABASE-LEVEL DOUBLE-BOOKING GUARD [SUGGESTED, PostgreSQL]
+  A room can have only one active reservation per term:
+
+    CREATE UNIQUE INDEX one_active_booking_per_room_per_term
+    ON room_bookings (room_id, term_id)
+    WHERE status IN ('held', 'confirmed');
+
+  This makes double-booking impossible even if application code has a bug.
+  If beds are bookable, apply the same index on (bed_id, term_id).
+
+Money: integers in sen. Prices resolve as
+  room.price_override_* if set, otherwise room_types.base_price_*.
+
+
+--------------------------------------------------------------------------------
+5. AVAILABILITY AND BOOKING LOGIC (ROOM LEVEL)
+--------------------------------------------------------------------------------
+A room is AVAILABLE for a term when:
+  - rooms.status = active, AND
+  - there is no room_bookings row for (room, term) with status held/confirmed.
+
+Derived counts (never stored):
+  - "Rooms available" for a property = count of available rooms in that term.
+  - "Only 3 rooms left!" for a room type or a floor = same count, filtered.
+  - Counts must come from the same query/source as booking, so UI and booking
+    never disagree.
+
+Booking steps when a student picks Room 502:
+  1. Student clicks "Select room". Client sends room_id and term_id.
+  2. Server opens a transaction and tries to INSERT a room_bookings row with
+     status = held (and the matching booking = pending_payment, expires_at =
+     now + hold time, e.g. 15 minutes).
+  3. If the unique index rejects the insert, someone else holds it. Respond
+     "This room was just taken" and return the student to the room list,
+     refreshed.
+  4. If it succeeds, show booking summary and send the student to payment.
+  5. Payment webhook confirms: held -> confirmed.
+  6. If the hold expires or payment fails: scheduled job sets the row to
+     expired and the room becomes available again.
+
+Student-facing states for each room tile:
+  Available | Held by another student (try again soon) | Booked | Unavailable
+  Show "held" rather than hiding the room, so students understand why it
+  disappears and may reappear.
+
+Waitlist impact [OPEN, Q19]: with specific rooms, waitlisting a particular
+room is awkward. Suggested simpler rule: waitlist per ROOM TYPE per property
+per term, and offer the next available room of that type to the first person
+on the list.
+
+Concurrency test to write: two students press "Select room" on room 502 at the
+same moment; exactly one must win.
+
+
+--------------------------------------------------------------------------------
+6. STUDENT-FACING FEATURES (REVISED / ADDED)
+--------------------------------------------------------------------------------
+F4 (revised) PROPERTY PAGE [DECIDED + SUGGESTED]
+  Contains: gallery, description, location on map, price range, and an
+  "Available rooms" section (F9). Summary line example:
+  "27 of 120 rooms available this semester".
+
+F9  AVAILABLE ROOMS SECTION [DECIDED]
+  After a student clicks the kolej name, show the rooms that are available.
+  Suggested layout:
+   a) Summary by room type: type name, "x available", "from RM y per semester".
+   b) Filters: floor, block/wing, room type, price range, features
+      (balcony, aircond, attached bathroom), gender where relevant.
+   c) Sort: price low-high, floor, room number.
+   d) Two views the student can toggle:
+        LIST VIEW  - cards: "Room 502 | Floor 5 | Single | RM ... | Available"
+        FLOOR VIEW - a grid grouped by floor (rows = floors, tiles = rooms),
+                     colour-coded by status. Good for browsing many rooms and
+                     for students who say "I want a high floor".
+   e) Show available rooms first; optionally a toggle "show unavailable".
+
+F10 ROOM DETAIL / OPTIONS [DECIDED]
+  Clicking a room (e.g. Room 502, floor 5) opens room details:
+  photos (type-level or room-specific), room type, floor, block, occupancy,
+  features, price breakdown (semester and monthly, deposit), what is shared
+  (for sharing rooms and 2BR rooms), and a "Select room" button.
+
+F11 RESIDENSI VARIANT [DECIDED]
+  For apartment-style properties, step (a) lists the unit/room types:
+  Studio, Twin studio, Single room in 2BR, Master room in 2BR.
+  Student picks a type, then sees the specific available units/rooms
+  (e.g. "Unit 12-03, Master room, floor 12").
+  For 2BR rooms, show the unit context: which other room(s) in the unit are
+  taken or free, so the student knows who they might share with
+  (without revealing personal data about other tenants).
+
+F12 ROOM HOLD FEEDBACK [SUGGESTED]
+  After "Select room", show a countdown for the payment hold and a clear
+  message if the hold expires or the room was just taken.
+
+Navigation requirements:
+  - Breadcrumb: Campus > Kolej name > Rooms > Room 502.
+  - Back button preserves filters and scroll position.
+  - Shareable URLs, e.g. /properties/ktdi/rooms?floor=5 and
+    /properties/ktdi/rooms/502.
+  - Work well on mobile: floor view must scroll horizontally/vertically
+    without tiny tap targets (min about 44px).
+
+
+--------------------------------------------------------------------------------
+7. ADMIN FEATURES (ADDED)
+--------------------------------------------------------------------------------
+A8  ROOM MANAGEMENT: create, edit, block (maintenance), archive rooms; set
+    floor, block, features, room type, optional price override.
+A9  BULK TOOLS: add many rooms at once (e.g. floors 1-9, rooms 01-20 per floor)
+    and CSV import/export of rooms. Essential because each property can have
+    hundreds of rooms.
+A10 ROOM STATUS VIEW: per property, a floor-by-floor grid showing each room as
+    available / held / booked / occupied / blocked, with the ability to
+    manually mark a room as taken (for bookings made offline) so the data does
+    not drift.
+Also: audit-log every manual status change and price override.
+
+
+--------------------------------------------------------------------------------
+8. DATA COLLECTION (THE BIG PRACTICAL TASK)
+--------------------------------------------------------------------------------
+No room-level data exists in any of the project files. For each of the 16 seed
+properties (12 JB + 4 KL, plus Pagoh later) the team needs, or must clearly
+simulate:
+  - building/block structure
+  - number of floors
+  - room numbers and which floor each is on
+  - room type per room
+  - capacity per room
+  - prices per room type
+  - which blocks/floors are gender-restricted
+  - photos and features
+
+Do NOT invent real-looking data and present it as official. For the course
+demo, generate placeholder rooms and label the data "Demo data" in the UI and
+the documentation.
+
+Suggested placeholder generator for the seed script (parameters per property):
+  floors = 1..N, rooms_per_floor = M, numbering = floor * 100 + index
+  (so floor 5 gives 501..5xx; floor 4 gives 401..4xx), matching the team's
+  examples (room 502 on floor 5, room 401 on floor 4).
+  CAUTION: the real numbering scheme of each kolej is unknown and may differ
+  (blocks, letters, ground-floor conventions). Make numbering a per-property
+  setting, not a hardcoded rule.
+
+Suggested CSV template for import:
+  property_code, building, unit_no, floor, room_no, room_type, capacity,
+  gender_restriction, features, price_override_semester, status
+
+Residensi example rows (PLACEHOLDER values only):
+  property_code, building, unit_no, floor, room_no, room_type
+  RES-KL,   Tower A, 12-03, 12, 12-03-A, master_room_2br
+  RES-KL,   Tower A, 12-03, 12, 12-03-B, single_room_2br
+  RES-KL,   Tower A, 12-08, 12, 12-08,   studio
+  RES-KL,   Tower A, 15-02, 15, 15-02,   twin_studio
+
+
+--------------------------------------------------------------------------------
+9. API ENDPOINTS (SUGGESTED, REST)
+--------------------------------------------------------------------------------
+Public / student:
+  GET  /campuses
+  GET  /campuses/:id/properties
+  GET  /properties/:id
+        -> details + summary counts (available rooms by type)
+  GET  /properties/:id/rooms?term=&floor=&type=&block=&features=&minPrice=
+        &maxPrice=&available=true&sort=&page=
+        -> paginated room list with status and resolved price
+  GET  /properties/:id/floors?term=
+        -> per-floor room tiles for the floor view
+  GET  /rooms/:id?term=
+        -> room detail
+  GET  /properties/:id/units?term=            (apartment-style properties)
+Authenticated student:
+  POST /bookings   { room_id, term_id }   -> creates hold + pending booking
+  GET  /bookings/:id
+  POST /bookings/:id/cancel
+  Payment endpoints and webhook as in master brief Sec. 9.
+Admin:
+  POST/PATCH/DELETE /admin/rooms
+  POST /admin/rooms/bulk
+  POST /admin/rooms/import (CSV)
+  PATCH /admin/rooms/:id/status
+Performance: index (property_id, floor), (room_type_id), and the booking index
+in Sec. 4. Paginate rooms, since one property may have hundreds.
+
+
+--------------------------------------------------------------------------------
+10. NEW OPEN QUESTIONS (continue numbering from master brief Q14)
+--------------------------------------------------------------------------------
+Q15 Is the residensi called "Residensi Gurney KL" or "Residensi UTM KL"?
+    What are its official room types and exact definitions?
+Q16 For twin/sharing rooms in kolej, does the student book the ROOM (and share
+    with whoever is assigned) or a specific BED, or does the system only reserve
+    a slot and let admin assign roommates?
+Q17 Can a student rent a WHOLE 2BR unit (and invite a friend), or only one
+    room inside it? If whole units are allowed, a booking must lock every room
+    in that unit.
+Q18 Do students pick their exact room at all colleges, or does UTM normally
+    allocate rooms? (This feature may conflict with real allocation rules; the
+    team should confirm it is acceptable for the product concept.)
+Q19 Waitlist rule: per room type per property (suggested), or per room?
+Q20 Are specific floors/blocks gender-restricted? If yes, the user profile must
+    hold gender, and the room list must filter by it automatically. Handle this
+    data carefully (Sec. 12 of master brief).
+Q21 Is room choice allowed for all booking periods (semester and monthly), and
+    how do monthly stays interact with room availability across months?
+Q22 Do prices differ by floor/room within the same type (premium for high
+    floor or corner)? If yes, use the price_override fields.
+Q23 Do returning residents have priority on their current room? Any rules for
+    renewing the same room next semester?
+Q24 Where will the real room data come from, and who is responsible for keeping
+    it correct after launch?
+
+
+--------------------------------------------------------------------------------
+11. BUILD ORDER ADJUSTMENTS
+--------------------------------------------------------------------------------
+Replace/adjust these phases from master brief Sec. 16:
+
+Phase 1 (schema): include buildings, units, rooms, room_bookings, the partial
+        unique index, and the seed generator (Sec. 8). Resolve Q16 and Q17
+        BEFORE finalising the schema, because bed-level or whole-unit booking
+        changes it.
+Phase 2 (browse): add the property page "Available rooms" section: summary by
+        type, filters, list view, then floor view.
+Phase 2b (room detail + residensi variant): room detail page; unit context for
+        2BR rooms.
+Phase 5 (booking engine): room-level hold, expiry job, "room just taken"
+        handling, concurrency tests.
+Phase 7 (admin): add room management, bulk create, CSV import, floor grid
+        status view (A8-A10).
+Phase 8 (waitlist): implement per Q19.
+
+Testing checklist for this feature:
+  [ ] Two simultaneous bookings for the same room: only one succeeds
+  [ ] Hold expires and the room reappears as available
+  [ ] Booked room never shows as available to anyone
+  [ ] Counts on property page match the number of rooms listed
+  [ ] Filters (floor, type, price) combine correctly
+  [ ] 2BR unit shows correct state when one room is booked and the other free
+  [ ] Gender-restricted rooms are hidden/blocked for the wrong user (if Q20)
+  [ ] Mobile: floor view usable with touch
+
+================================================================================
+END OF ADDENDUM 01
+================================================================================
