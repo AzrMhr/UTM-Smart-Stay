@@ -10,14 +10,20 @@ import {
   LogOut,
   ChevronRight,
   Building2,
+  Search,
+  TrendingUp,
 } from 'lucide-react';
-import { StudentUser, BookingRecord, PortalRole } from '../types';
+import { StudentUser, BookingRecord, PortalRole, CampusId } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
   student: StudentUser;
   bookings: BookingRecord[];
   activeTabLabel?: string;
+  selectedCampus?: CampusId;
+  onCampusChange?: (campus: CampusId) => void;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
   onNavigateToTab: (tab: 'home' | 'map' | 'community' | 'messages') => void;
   onSwitchPortal: (role: PortalRole) => void;
   onSignOutStudent?: () => void;
@@ -26,7 +32,10 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   student,
   bookings,
-  activeTabLabel = 'Accommodations Marketplace',
+  selectedCampus = 'jb',
+  onCampusChange,
+  searchQuery = '',
+  onSearchChange,
   onNavigateToTab,
   onSwitchPortal,
   onSignOutStudent,
@@ -34,45 +43,52 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
+  const topNavItems: { id: CampusId; label: string }[] = [
+    { id: 'all', label: 'ANALYTICS' },
+    { id: 'jb', label: 'JOHOR BAHRU' },
+    { id: 'kl', label: 'KUALA LUMPUR' },
+    { id: 'pagoh', label: 'PAGOH' },
+  ];
+
   return (
     <>
-      <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md shadow-xs border-b border-slate-200/80 transition-all">
+      <header className="sticky top-0 z-40 w-full bg-[#A81518]/95 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none border-b border-white/10 lg:border-none transition-all">
         {/* Mobile Header (< lg): Exact 3-part layout */}
-        <div className="lg:hidden px-4 h-14 flex items-center justify-between">
+        <div className="lg:hidden px-4 h-14 flex items-center justify-between text-white">
           {/* Left side: Hamburger menu icon */}
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation menu"
-            className="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-slate-700 hover:bg-slate-100 active:scale-95 transition-transform"
+            className="w-10 h-10 -ml-1 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-transform"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          {/* Center: App title "UTM Smart Stay" in bold, dark red sans-serif */}
+          {/* Center: App title "UTM Smart Stay" in bold sans-serif */}
           <div
-            className="flex items-center gap-1.5 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer"
             onClick={() => onNavigateToTab('home')}
           >
-            <span
-              className="text-lg font-black tracking-tight select-none"
-              style={{ color: '#800000' }}
-            >
+            <div className="w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-xs">
+              <TrendingUp className="w-4 h-4 text-[#A81518]" />
+            </div>
+            <span className="text-base font-black tracking-tight text-white select-none">
               UTM Smart Stay
             </span>
           </div>
 
-          {/* Right side: Notification bell with red dot + Profile avatar */}
+          {/* Right side: Notification bell with indicator dot + Profile avatar */}
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
                 aria-label="Notifications"
-                className="w-10 h-10 rounded-full flex items-center justify-center text-slate-700 hover:bg-slate-100 active:scale-95 transition-transform relative"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 active:scale-95 transition-transform relative"
               >
-                <Bell className="w-5 h-5 text-slate-700" />
-                <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-red-600 ring-2 ring-white" />
+                <Bell className="w-5 h-5 text-white" />
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-amber-300 ring-2 ring-[#A81518]" />
               </button>
             </div>
 
@@ -80,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label="Student profile"
-              className="w-8 h-8 rounded-full ring-2 ring-slate-100 overflow-hidden flex items-center justify-center bg-slate-200 active:scale-95 transition-transform"
+              className="w-8 h-8 rounded-full ring-2 ring-white/80 overflow-hidden flex items-center justify-center bg-slate-200 active:scale-95 transition-transform"
             >
               <img
                 src={
@@ -95,20 +111,80 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Desktop Header (>= lg): Clean Breadcrumb Left, PWA Install & Student Profile Right */}
-        <div className="hidden lg:flex items-center justify-between px-8 h-16 max-w-7xl mx-auto">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span
+        {/* Desktop Header (>= lg): Matches the Reference Image Crimson Top Bar */}
+        <div className="hidden lg:flex items-center justify-between px-8 h-20 max-w-7xl mx-auto text-white">
+          {/* Left: White Square Logo Mark + Uppercase Nav Links */}
+          <div className="flex items-center gap-8">
+            <button
+              type="button"
               onClick={() => onNavigateToTab('home')}
-              className="font-bold text-[#800000] cursor-pointer hover:underline"
+              className="flex items-center gap-3 group cursor-pointer"
             >
-              UTM Smart Stay
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-semibold text-slate-800">{activeTabLabel}</span>
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                <TrendingUp className="w-5 h-5 text-[#B11217]" />
+              </div>
+              <div className="text-left">
+                <span className="text-sm font-black tracking-tight text-white block leading-none">
+                  UTM SMART STAY
+                </span>
+                <span className="text-[10px] font-semibold tracking-widest text-white/70 uppercase">
+                  Accommodation Hub
+                </span>
+              </div>
+            </button>
+
+            <nav className="flex items-center gap-6 pl-2">
+              {topNavItems.map((item) => {
+                const isActive = selectedCampus === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onNavigateToTab('home');
+                      if (onCampusChange) onCampusChange(item.id);
+                    }}
+                    className={`text-xs tracking-[0.14em] uppercase transition-all cursor-pointer py-1 border-b-2 ${
+                      isActive
+                        ? 'font-extrabold text-white border-white'
+                        : 'font-semibold text-white/65 hover:text-white border-transparent'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Right: Translucent Dark-Crimson Search Input + Bell + Avatar */}
+          <div className="flex items-center gap-4">
+            {onSearchChange && (
+              <div className="relative w-72 xl:w-80">
+                <Search className="w-4 h-4 text-white/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    onNavigateToTab('home');
+                    onSearchChange(e.target.value);
+                  }}
+                  placeholder="Search by Residence, Room, Matric..."
+                  className="w-full h-10 pl-10 pr-8 rounded-xl bg-black/25 hover:bg-black/30 focus:bg-black/35 text-xs text-white placeholder:text-white/60 border border-white/10 focus:outline-none focus:border-white/30 transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => onSearchChange('')}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
             <PWAInstallButton variant="compact" />
 
             <div className="relative">
@@ -116,31 +192,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                 type="button"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
                 aria-label="Notifications"
-                className="w-9 h-9 rounded-full flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors relative cursor-pointer"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white/90 hover:text-white hover:bg-white/10 transition-colors relative cursor-pointer"
               >
-                <Bell className="w-5 h-5 text-slate-700" />
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-600 ring-2 ring-white" />
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-amber-300 ring-2 ring-[#B11217]" />
               </button>
             </div>
 
-            <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="flex items-center gap-2.5 pl-1 cursor-pointer group"
+              title="Open Student Profile Drawer"
+            >
               <img
                 src={student.avatarUrl}
                 alt={student.fullName}
                 referrerPolicy="no-referrer"
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-slate-100"
+                className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-md group-hover:scale-105 transition-transform"
               />
-              <div className="text-left leading-tight">
-                <div className="text-xs font-bold text-slate-900">{student.fullName}</div>
-                <div className="text-[10px] font-mono text-slate-500">{student.matricNo}</div>
-              </div>
-            </div>
+            </button>
           </div>
         </div>
 
         {/* Shared Notification Popover */}
         {notificationsOpen && (
-          <div className="absolute right-4 lg:right-8 top-14 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="absolute right-4 lg:right-8 top-14 lg:top-18 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150 text-slate-800">
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
               <span className="text-xs font-bold text-slate-800">Campus Notifications</span>
               <span className="text-[10px] font-semibold text-[#800000] bg-red-50 px-2 py-0.5 rounded-full">
@@ -185,7 +262,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </header>
 
-      {/* Mobile Slide-out Navigation Drawer (Strictly Student-Facing) */}
+      {/* Slide-out Navigation Drawer (Strictly Student-Facing) */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div
@@ -194,7 +271,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           />
 
           <aside className="relative w-80 max-w-[85vw] bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-left duration-200">
-            <div className="p-5 text-white" style={{ backgroundColor: '#800000' }}>
+            <div className="p-5 text-white bg-gradient-to-br from-[#B11217] to-[#7A0B0E]">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs font-semibold tracking-wider text-red-100 uppercase">
                   UTM Student Portal
@@ -255,10 +332,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-left"
               >
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-4 h-4 text-[#800000]" />
+                  <CheckCircle2 className="w-4 h-4 text-[#B11217]" />
                   <span className="font-medium text-slate-800">My Bookings &amp; Waitlist</span>
                 </div>
-                <span className="text-xs bg-red-50 text-[#800000] font-bold px-2 py-0.5 rounded-full">
+                <span className="text-xs bg-red-50 text-[#B11217] font-bold px-2 py-0.5 rounded-full">
                   {bookings.length}
                 </span>
               </button>
@@ -271,7 +348,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-left"
               >
-                <Shield className="w-4 h-4 text-[#800000]" />
+                <Shield className="w-4 h-4 text-[#B11217]" />
                 <span className="font-medium text-slate-800">Campus College Map &amp; POIs</span>
               </button>
 
@@ -283,7 +360,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition-colors text-left"
               >
-                <FileText className="w-4 h-4 text-[#800000]" />
+                <FileText className="w-4 h-4 text-[#B11217]" />
                 <span className="font-medium text-slate-800">Roommate Matching Board</span>
               </button>
 
