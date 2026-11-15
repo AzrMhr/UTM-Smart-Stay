@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CURRENT_STUDENT,
   INITIAL_PROPERTIES,
   INITIAL_ROOMS,
   INITIAL_BOOKINGS,
   INITIAL_WAITLIST,
+  INITIAL_AUDIT_LOGS,
   INITIAL_ROOMMATES,
   INITIAL_CARPOOLS,
   INITIAL_MESSAGE_THREADS,
@@ -17,9 +18,12 @@ import {
   RoomItem,
   BookingRecord,
   WaitlistRecord,
+  AuditLogEntry,
   RoommateListing,
   CarpoolListing,
   MessageThread,
+  PortalRole,
+  StudentUser,
 } from './types';
 import { Navbar } from './components/Navbar';
 import { DesktopSidebar } from './components/DesktopSidebar';
@@ -32,47 +36,120 @@ import { RoomSelectionView } from './components/RoomSelectionView';
 import { CampusMapView } from './components/CampusMapView';
 import { CommunityView } from './components/CommunityView';
 import { MessagesView } from './components/MessagesView';
-import { DatabaseModal } from './components/DatabaseModal';
-import { DeploymentGuideModal } from './components/DeploymentGuideModal';
+import { StudentAuthModal } from './components/StudentAuthModal';
+import { AdminPortal } from './components/AdminPortal';
+import { SysAdminPortal } from './components/SysAdminPortal';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { Database, Sparkles, Rocket } from 'lucide-react';
+import { Sparkles, Building2 } from 'lucide-react';
+
+function resolvePortalFromLocation(): PortalRole {
+  if (typeof window === 'undefined') return 'student';
+
+  // Handle GitHub Pages SPA 404 redirect query (?p=/admin or ?p=/sysadmin)
+  const params = new URLSearchParams(window.location.search);
+  const redirectedPath = params.get('p');
+  const rawPath = (redirectedPath || window.location.pathname || '/').toLowerCase();
+  const rawHash = (window.location.hash || '').toLowerCase();
+
+  if (rawPath.endsWith('/sysadmin') || rawHash.includes('/sysadmin')) {
+    return 'sysadmin';
+  }
+  if (rawPath.endsWith('/admin') || rawHash.includes('/admin')) {
+    return 'admin';
+  }
+  return 'student';
+}
 
 export default function App() {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<TabType>('home');
+  // Multi-Site Portal State ('/' | '/admin' | '/sysadmin')
+  const [portalRole, setPortalRole] = useState<PortalRole>(() => resolvePortalFromLocation());
 
-  // Search & Filter State
+  // Normalize GitHub Pages ?p= redirect on initial load
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirected = params.get('p');
+    if (redirected) {
+      try {
+        window.history.replaceState({}, '', redirected);
+      } catch {
+        // ignore if restricted
+      }
+    }
+  }, []);
+
+  // Listen to browser back/forward and hash changes
+  useEffect(() => {
+    const syncPortal = () => setPortalRole(resolvePortalFromLocation());
+    window.addEventListener('popstate', syncPortal);
+    window.addEventListener('hashchange', syncPortal);
+    return () => {
+      window.removeEventListener('popstate', syncPortal);
+      window.removeEventListener('hashchange', syncPortal);
+    };
+  }, []);
+
+  // Student Session State
+  const [activeStudent, setActiveStudent] = useState<StudentUser>(CURRENT_STUDENT);
+  const [isStudentAuthOpen, setIsStudentAuthOpen] = useState(false);
+
+  // Student Navigation State
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [searchQuery, setSearchQuery] = useState('');
-  // "Johor Bahru" is styled as active by default per prompt specifications
   const [selectedCampus, setSelectedCampus] = useState<CampusId>('jb');
 
-  // Database State (Persisted in LocalStorage)
+  // Shared Persistent Database State
   const [properties, setProperties] = useState<RoomProperty[]>(() => LocalDatabase.getProperties());
   const [rooms, setRooms] = useState<RoomItem[]>(() => LocalDatabase.getRooms());
   const [bookings, setBookings] = useState<BookingRecord[]>(() => LocalDatabase.getBookings());
   const [waitlist, setWaitlist] = useState<WaitlistRecord[]>(() => LocalDatabase.getWaitlist());
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => LocalDatabase.getAuditLogs());
   const [wishlist, setWishlist] = useState<string[]>(() => LocalDatabase.getWishlist());
   const [roommates, setRoommates] = useState<RoommateListing[]>(INITIAL_ROOMMATES);
   const [carpools, setCarpools] = useState<CarpoolListing[]>(INITIAL_CARPOOLS);
   const [messages, setMessages] = useState<MessageThread[]>(INITIAL_MESSAGE_THREADS);
 
-  // Drill-down State: Campus -> Kolej name -> Available rooms -> Room options (Addendum 01 Sec. 1)
+  // Student Drill-down & Modal State
   const [selectedPropertyForDrillDown, setSelectedPropertyForDrillDown] =
     useState<RoomProperty | null>(null);
   const [selectedRoomForModal, setSelectedRoomForModal] = useState<RoomItem | null>(null);
-
-  // Modal States
   const [modalProperty, setModalProperty] = useState<RoomProperty | null>(null);
-  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
-  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((current) => (current === msg ? null : current));
     }, 3000);
-  };
+  }, []);
+
+  const refreshDatabaseState = useCallback(() => {
+    setProperties(LocalDatabase.getProperties());
+    setRooms(LocalDatabase.getRooms());
+    setBookings(LocalDatabase.getBookings());
+    setWaitlist(LocalDatabase.getWaitlist());
+    setAuditLogs(LocalDatabase.getAuditLogs());
+    setWishlist(LocalDatabase.getWishlist());
+  }, []);
+
+  const switchPortal = useCallback(
+    (role: PortalRole) => {
+      const targetPath = role === 'student' ? '/' : role === 'admin' ? '/admin' : '/sysadmin';
+      try {
+        if (window.location.protocol === 'file:') {
+          window.location.hash = `#${targetPath}`;
+        } else {
+          window.history.pushState({}, '', targetPath);
+        }
+      } catch {
+        window.location.hash = `#${targetPath}`;
+      }
+      setPortalRole(role);
+      setSelectedPropertyForDrillDown(null);
+      refreshDatabaseState();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    [refreshDatabaseState]
+  );
 
   // Wishlist handler
   const handleToggleWishlist = (propertyId: string) => {
@@ -89,75 +166,33 @@ export default function App() {
     roomItem?: RoomItem
   ) => {
     if (roomItem) {
-      // Room-level reservation (Addendum 01 Sec. 5)
       const res = LocalDatabase.bookSpecificRoom(roomItem, paymentMethod);
-      if (res.success && res.booking) {
-        setRooms(LocalDatabase.getRooms());
-        setProperties(LocalDatabase.getProperties());
-        setBookings(LocalDatabase.getBookings());
-        showToast(res.message);
-      } else {
-        showToast(res.message);
-      }
+      refreshDatabaseState();
+      showToast(res.message);
     } else {
-      // Fallback property-level reservation
       const res = LocalDatabase.createBooking(property, paymentMethod);
-      if (res.success && res.booking) {
-        setProperties(LocalDatabase.getProperties());
-        setBookings(LocalDatabase.getBookings());
-        showToast(res.message);
-      } else {
-        showToast(res.message);
-      }
+      refreshDatabaseState();
+      showToast(res.message);
     }
   };
 
   // Waitlist handler
   const handleJoinWaitlist = (property: RoomProperty) => {
     const res = LocalDatabase.joinWaitlist(property);
-    if (res.success && res.waitlist) {
-      setProperties(LocalDatabase.getProperties());
-      setWaitlist(LocalDatabase.getWaitlist());
-      showToast(res.message);
-    } else {
-      showToast(res.message);
-    }
+    refreshDatabaseState();
+    showToast(res.message);
   };
 
-  // Reset database handler
+  // System Admin Reset Database handler
   const handleResetDatabase = () => {
     LocalDatabase.resetDatabase();
     setProperties(INITIAL_PROPERTIES);
     setRooms(INITIAL_ROOMS);
     setBookings(INITIAL_BOOKINGS);
     setWaitlist(INITIAL_WAITLIST);
+    setAuditLogs(INITIAL_AUDIT_LOGS);
     setWishlist(['ktdi-jb-01']);
-    showToast('Database reset to fresh course project seed state!');
-  };
-
-  // Database manual inventory update (Properties)
-  const handleUpdatePropertyUnits = (propId: string, delta: number) => {
-    const updated = properties.map((p) => {
-      if (p.id === propId) {
-        const newUnits = Math.max(0, p.availableUnits + delta);
-        return {
-          ...p,
-          availableUnits: newUnits,
-          statusBadge: newUnits > 0 ? ('Available Now' as const) : ('Waitlist Open' as const),
-        };
-      }
-      return p;
-    });
-    setProperties(updated);
-    LocalDatabase.saveProperties(updated);
-  };
-
-  // Room status toggle in Database Inspector (A10)
-  const handleToggleRoomStatus = (roomId: string, status: RoomItem['status']) => {
-    LocalDatabase.updateRoomStatus(roomId, status);
-    setRooms(LocalDatabase.getRooms());
-    setProperties(LocalDatabase.getProperties());
-    showToast(`Updated status of room to ${status}`);
+    showToast('Database reset to initial UTM Smart Stay seed state');
   };
 
   // Send message in chat
@@ -182,13 +217,10 @@ export default function App() {
     setMessages(updated);
   };
 
-  // When clicking "View Details" on a property card:
-  // Navigate directly into the Addendum 01 room selection drill-down!
   const handleViewDetails = (property: RoomProperty) => {
     setSelectedPropertyForDrillDown(property);
   };
 
-  // When student picks a room inside the room selection view:
   const handleSelectSpecificRoom = (room: RoomItem) => {
     const parentProp =
       properties.find((p) => p.id === room.propertyId) || selectedPropertyForDrillDown;
@@ -198,7 +230,9 @@ export default function App() {
 
   // Synchronize derived availableUnits on properties from physical rooms
   const syncedProperties = properties.map((p) => {
-    const freeRooms = rooms.filter((r) => r.propertyId === p.id && r.status === 'available').length;
+    const freeRooms = rooms.filter(
+      (r) => r.propertyId === p.id && r.status === 'available'
+    ).length;
     return {
       ...p,
       availableUnits: freeRooms,
@@ -224,7 +258,7 @@ export default function App() {
     return matchesCampus && matchesSearch;
   });
 
-  // Ensure Card 1 (KTDI) and Card 2 (KSJ) are ordered first on main view
+  // Ensure KTDI and KSJ appear first on the marketplace view
   const orderedProperties = [...filteredProperties].sort((a, b) => {
     if (a.id === 'ktdi-jb-01') return -1;
     if (b.id === 'ktdi-jb-01') return 1;
@@ -244,6 +278,54 @@ export default function App() {
       ? 'Student Community & My Bookings'
       : 'Student Inquiries & Messages';
 
+  const toastBanner = toastMessage && (
+    <div className="fixed bottom-20 lg:bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-md text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg border border-slate-700/80 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+      <span>{toastMessage}</span>
+    </div>
+  );
+
+  // SITE 2: Housing Management Admin Portal (/admin)
+  if (portalRole === 'admin') {
+    return (
+      <>
+        <AdminPortal
+          properties={syncedProperties}
+          rooms={rooms}
+          bookings={bookings}
+          waitlist={waitlist}
+          onRefreshData={refreshDatabaseState}
+          onSwitchPortal={switchPortal}
+          onShowToast={showToast}
+        />
+        <OfflineIndicator />
+        {toastBanner}
+      </>
+    );
+  }
+
+  // SITE 3: System Administrator Console (/sysadmin)
+  if (portalRole === 'sysadmin') {
+    return (
+      <>
+        <SysAdminPortal
+          properties={syncedProperties}
+          rooms={rooms}
+          bookings={bookings}
+          waitlist={waitlist}
+          auditLogs={auditLogs}
+          onRefreshData={refreshDatabaseState}
+          onResetDatabase={handleResetDatabase}
+          onSwitchPortal={switchPortal}
+          onShowToast={showToast}
+        />
+        <OfflineIndicator />
+        {toastBanner}
+      </>
+    );
+  }
+
+  // SITE 1: Student Marketplace (/) — Strictly Student-Facing
   return (
     <div className="min-h-screen bg-slate-100 lg:bg-[#F8F9FA] flex">
       {/* Desktop Persistent Sidebar Navigation (Visible on lg: >= 1024px) */}
@@ -255,37 +337,33 @@ export default function App() {
         }}
         selectedCampus={selectedCampus}
         onCampusChange={setSelectedCampus}
-        student={CURRENT_STUDENT}
+        student={activeStudent}
         bookings={bookings}
         waitlist={waitlist}
         unreadCount={2}
-        onOpenDatabaseModal={() => setIsDbModalOpen(true)}
-        onOpenDeployModal={() => setIsDeployModalOpen(true)}
-        onResetDatabase={handleResetDatabase}
+        onSwitchPortal={switchPortal}
+        onSignOutStudent={() => setIsStudentAuthOpen(true)}
       />
 
-      {/* Responsive App Canvas: Centered Mobile View on <1024px, Full Multi-Column Viewport on >=1024px */}
+      {/* Responsive App Canvas */}
       <div className="flex-1 lg:pl-72 flex flex-col min-h-screen w-full">
         <div className="w-full max-w-md lg:max-w-none mx-auto min-h-screen bg-white lg:bg-transparent shadow-2xl lg:shadow-none flex flex-col relative pb-20 lg:pb-10">
           {/* 1. Global Navigation Bar (Sticky Top) */}
           <Navbar
-            student={CURRENT_STUDENT}
+            student={activeStudent}
             bookings={bookings}
-            waitlist={waitlist}
             activeTabLabel={activeTabLabel}
-            onOpenDatabaseModal={() => setIsDbModalOpen(true)}
-            onOpenDeployModal={() => setIsDeployModalOpen(true)}
-            onResetDatabase={handleResetDatabase}
             onNavigateToTab={(tab) => {
               setActiveTab(tab);
               setSelectedPropertyForDrillDown(null);
             }}
+            onSwitchPortal={switchPortal}
+            onSignOutStudent={() => setIsStudentAuthOpen(true)}
           />
 
-          {/* Dynamic Main View Switcher based on Active Tab */}
+          {/* Dynamic Main View Switcher */}
           {activeTab === 'home' && (
             <main className="flex-1 flex flex-col animate-in fade-in duration-150">
-              {/* If user is drilling down into a Kolej's available rooms (Addendum 01 Sec. 1 & 6) */}
               {selectedPropertyForDrillDown ? (
                 <RoomSelectionView
                   property={selectedPropertyForDrillDown}
@@ -304,9 +382,8 @@ export default function App() {
                     resultCount={orderedProperties.length}
                   />
 
-                  {/* 3. Main Content Area: Accommodation Listings (Vertical on Mobile, Multi-Column Grid on Desktop) */}
+                  {/* 3. Main Content Area: Accommodation Listings */}
                   <section className="px-4 lg:px-8 py-4 lg:py-6 max-w-7xl w-full mx-auto space-y-4">
-                    {/* Section Title: "Available Accommodations" (Dark gray, bold) */}
                     <div className="flex items-center justify-between">
                       <h1 className="text-lg lg:text-xl font-bold text-slate-800 tracking-tight">
                         Available Accommodations
@@ -316,7 +393,6 @@ export default function App() {
                       </span>
                     </div>
 
-                    {/* Stacked on mobile, 2-to-3 column responsive grid on desktop */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
                       {orderedProperties.map((property) => (
                         <AccommodationCard
@@ -356,26 +432,20 @@ export default function App() {
                     onViewAllCommunity={() => setActiveTab('community')}
                   />
 
-                  {/* Quick Database & Deployment Action Bar */}
-                  <div className="px-4 lg:px-8 py-3 flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsDbModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors border border-slate-200/80 cursor-pointer"
-                    >
-                      <Database className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Test Room-Level Database (Azraf Mahir)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsDeployModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-semibold text-[#800000] bg-red-50 hover:bg-red-100 transition-colors border border-red-200/80 cursor-pointer"
-                    >
-                      <Rocket className="w-3.5 h-3.5 text-[#800000]" />
-                      <span>Deployment &amp; PWA Instructions</span>
-                    </button>
-                  </div>
+                  {/* Clean Student Footer */}
+                  <footer className="px-4 lg:px-8 py-5 border-t border-slate-200/70 mt-auto">
+                    <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <span>UTM Smart Stay · Independent Student Accommodation Platform</span>
+                      <button
+                        type="button"
+                        onClick={() => switchPortal('admin')}
+                        className="inline-flex items-center gap-1.5 text-slate-500 hover:text-[#800000] font-semibold transition-colors cursor-pointer"
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>Housing Staff Portal</span>
+                      </button>
+                    </div>
+                  </footer>
                 </>
               )}
             </main>
@@ -400,7 +470,7 @@ export default function App() {
           {activeTab === 'community' && (
             <main className="flex-1 animate-in fade-in duration-150">
               <CommunityView
-                student={CURRENT_STUDENT}
+                student={activeStudent}
                 bookings={bookings}
                 waitlist={waitlist}
                 roommates={roommates}
@@ -424,7 +494,7 @@ export default function App() {
             <main className="flex-1 animate-in fade-in duration-150">
               <MessagesView
                 threads={messages}
-                student={CURRENT_STUDENT}
+                student={activeStudent}
                 onSendMessage={handleSendMessage}
               />
             </main>
@@ -440,11 +510,11 @@ export default function App() {
             unreadCount={2}
           />
 
-          {/* Room Detail Full Modal */}
+          {/* Room Detail & Booking Modal */}
           <RoomDetailModal
             property={modalProperty}
             room={selectedRoomForModal}
-            student={CURRENT_STUDENT}
+            student={activeStudent}
             onClose={() => {
               setModalProperty(null);
               setSelectedRoomForModal(null);
@@ -453,36 +523,20 @@ export default function App() {
             onJoinWaitlist={handleJoinWaitlist}
           />
 
-          {/* Course Database Inspector Modal */}
-          <DatabaseModal
-            isOpen={isDbModalOpen}
-            onClose={() => setIsDbModalOpen(false)}
-            student={CURRENT_STUDENT}
-            properties={syncedProperties}
-            rooms={rooms}
-            bookings={bookings}
-            waitlist={waitlist}
-            onUpdatePropertyUnits={handleUpdatePropertyUnits}
-            onToggleRoomStatus={handleToggleRoomStatus}
-            onResetDatabase={handleResetDatabase}
-          />
-
-          {/* Deployment & PWA Instructions Modal */}
-          <DeploymentGuideModal
-            isOpen={isDeployModalOpen}
-            onClose={() => setIsDeployModalOpen(false)}
+          {/* Student Switch / OTP Authentication Modal */}
+          <StudentAuthModal
+            isOpen={isStudentAuthOpen}
+            onClose={() => setIsStudentAuthOpen(false)}
+            onAuthenticated={(newStudent) => {
+              setActiveStudent(newStudent);
+              showToast(`Signed in as ${newStudent.fullName} (${newStudent.matricNo})`);
+            }}
           />
 
           {/* Offline Mode Connectivity Banner */}
           <OfflineIndicator />
 
-          {/* Toast Notification */}
-          {toastMessage && (
-            <div className="fixed bottom-20 lg:bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 backdrop-blur-md text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg border border-slate-700/80 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>{toastMessage}</span>
-            </div>
-          )}
+          {toastBanner}
         </div>
       </div>
     </div>

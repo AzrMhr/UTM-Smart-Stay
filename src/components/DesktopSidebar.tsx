@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Home,
   Map,
   Users,
   MessageSquare,
-  Database,
-  Rocket,
-  RotateCcw,
   Phone,
   ShieldCheck,
   Building2,
+  LogOut,
 } from 'lucide-react';
-import { StudentUser, BookingRecord, WaitlistRecord, CampusId } from '../types';
+import { StudentUser, BookingRecord, WaitlistRecord, CampusId, PortalRole } from '../types';
 import { TabType } from './BottomNav';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -24,9 +22,8 @@ interface DesktopSidebarProps {
   bookings: BookingRecord[];
   waitlist: WaitlistRecord[];
   unreadCount: number;
-  onOpenDatabaseModal: () => void;
-  onOpenDeployModal: () => void;
-  onResetDatabase: () => void;
+  onSwitchPortal: (role: PortalRole) => void;
+  onSignOutStudent?: () => void;
 }
 
 export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
@@ -38,13 +35,16 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   bookings,
   waitlist,
   unreadCount,
-  onOpenDatabaseModal,
-  onOpenDeployModal,
-  onResetDatabase,
+  onSwitchPortal,
+  onSignOutStudent,
 }) => {
-  const [confirmReset, setConfirmReset] = useState(false);
-
-  const navItems: { id: TabType; label: string; sublabel: string; icon: React.ElementType; badge?: number }[] = [
+  const navItems: {
+    id: TabType;
+    label: string;
+    sublabel: string;
+    icon: React.ElementType;
+    badge?: number;
+  }[] = [
     {
       id: 'home',
       label: 'Accommodations',
@@ -107,7 +107,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         </div>
       </div>
 
-      {/* Verified Student Card (Azraf Mahir) */}
+      {/* Verified Student Card */}
       <div className="p-4 border-b border-slate-100">
         <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
           <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5">
         <div className="space-y-1">
           <div className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Main Navigation
+            Student Navigation
           </div>
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
@@ -229,66 +229,42 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           })}
         </div>
 
-        {/* Developer, PWA & Deployment Tools */}
+        {/* Native App Install */}
         <div className="space-y-2 pt-2 border-t border-slate-100">
-          <div className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Native App &amp; Deployment
-          </div>
-
           <PWAInstallButton variant="sidebar" />
-
-          <button
-            type="button"
-            onClick={onOpenDeployModal}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-800 text-xs font-bold transition-colors text-left cursor-pointer"
-          >
-            <Rocket className="w-4 h-4 text-[#800000] shrink-0" />
-            <div>
-              <span className="block leading-tight">Deploy &amp; Install Guide</span>
-              <span className="text-[10px] text-slate-500 font-normal">
-                Vercel &amp; GitHub Pages steps
-              </span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={onOpenDatabaseModal}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/90 text-slate-800 text-xs font-bold transition-colors text-left cursor-pointer"
-          >
-            <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-            <div>
-              <span className="block leading-tight">Database Inspector</span>
-              <span className="text-[10px] text-slate-500 font-normal">
-                Room-level records &amp; locks
-              </span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (confirmReset) {
-                onResetDatabase();
-                setConfirmReset(false);
-              } else {
-                setConfirmReset(true);
-              }
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-rose-700 hover:bg-rose-50 text-xs font-semibold transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-            <span>
-              {confirmReset ? 'Click again to confirm reset' : 'Reset Seed Database'}
-            </span>
-          </button>
+          {onSignOutStudent && (
+            <button
+              type="button"
+              onClick={onSignOutStudent}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
+              <span>Sign Out / Switch Student</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Sidebar Footer */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/60 text-[11px] text-slate-400">
-        <div className="font-semibold text-slate-600">SCSE2243 App Dev Project I</div>
-        <div>UTM MJIIT • PWA &amp; Responsive Web</div>
+      {/* Subtle Staff Portal Link in Footer */}
+      <div className="p-4 border-t border-slate-100 bg-slate-50/70 text-[11px] text-slate-500 space-y-1.5">
+        <div className="font-semibold text-slate-700">UTM Smart Stay • Student Site</div>
+        <div className="flex items-center gap-2 text-[10px]">
+          <button
+            type="button"
+            onClick={() => onSwitchPortal('admin')}
+            className="hover:text-[#800000] hover:underline font-medium cursor-pointer"
+          >
+            Housing Staff Portal
+          </button>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button"
+            onClick={() => onSwitchPortal('sysadmin')}
+            className="hover:text-[#800000] hover:underline font-medium cursor-pointer"
+          >
+            System Admin
+          </button>
+        </div>
       </div>
     </aside>
   );

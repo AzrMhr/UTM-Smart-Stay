@@ -8,6 +8,7 @@ import {
   CarpoolListing,
   MessageThread,
   PointOfInterest,
+  AuditLogEntry,
 } from '../types';
 
 export const CURRENT_STUDENT: StudentUser = {
@@ -1238,6 +1239,36 @@ export const INITIAL_POIS: PointOfInterest[] = [
   },
 ];
 
+export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
+  {
+    id: 'aud-001',
+    timestamp: '2026-10-24 14:32',
+    actorRole: 'system',
+    actorName: 'Booking Engine (Unique Lock)',
+    action: 'ROOM_BOOKED',
+    target: 'KTDI • Single Room',
+    details: 'Confirmed booking UTM-BK-84291 for Azraf Mahir (A24MJ3028), Deposit RM 200',
+  },
+  {
+    id: 'aud-002',
+    timestamp: '2026-10-26 09:20',
+    actorRole: 'admin',
+    actorName: 'Dr. Norazlina (HEPA Admin)',
+    action: 'WAITLIST_OFFER',
+    target: 'KSJ • Room 502',
+    details: 'Offered Room 502 hold to Tanjim Rahman (A24MJ3012) - Queue Position #1',
+  },
+  {
+    id: 'aud-003',
+    timestamp: '2026-10-28 11:05',
+    actorRole: 'admin',
+    actorName: 'En. Hafiz (KTDI Officer)',
+    action: 'ROOM_STATUS_CHANGE',
+    target: 'KTDI • Room 101',
+    details: 'Marked Room 101 as maintenance for routine electrical inspection',
+  },
+];
+
 // Persistent Local Database Store Manager
 const STORAGE_KEY_PREFIX = 'utm_smart_stay_db_v1';
 
@@ -1455,10 +1486,16 @@ export class LocalDatabase {
     return this.getRooms().find((r) => r.id === roomId);
   }
 
-  static updateRoomStatus(roomId: string, status: RoomItem['status']): void {
+  static updateRoomStatus(
+    roomId: string,
+    status: RoomItem['status'],
+    actorRole: AuditLogEntry['actorRole'] = 'admin',
+    actorName: string = 'HEPA Housing Staff'
+  ): void {
     const rooms = this.getRooms();
     const idx = rooms.findIndex((r) => r.id === roomId);
     if (idx !== -1) {
+      const prevStatus = rooms[idx].status;
       rooms[idx].status = status;
       this.saveRooms(rooms);
 
@@ -1472,7 +1509,176 @@ export class LocalDatabase {
         properties[pIndex].statusBadge = remaining > 0 ? 'Available Now' : 'Waitlist Open';
         this.saveProperties(properties);
       }
+
+      this.addAuditLog({
+        actorRole,
+        actorName,
+        action: 'ROOM_STATUS_CHANGE',
+        target: `${rooms[idx].propertyName} • Room ${rooms[idx].roomNo}`,
+        details: `Changed status from ${prevStatus} to ${status}`,
+      });
     }
+  }
+
+  static updatePropertyPricing(
+    propertyId: string,
+    priceMonth: number,
+    priceSemester: number,
+    depositAmount: number,
+    actorName: string = 'HEPA Housing Staff'
+  ): void {
+    const properties = this.getProperties();
+    const pIdx = properties.findIndex((p) => p.id === propertyId);
+    if (pIdx !== -1) {
+      properties[pIdx].priceMonth = priceMonth;
+      properties[pIdx].priceSemester = priceSemester;
+      properties[pIdx].depositAmount = depositAmount;
+      this.saveProperties(properties);
+
+      const rooms = this.getRooms().map((r) =>
+        r.propertyId === propertyId
+          ? { ...r, priceMonth, priceSemester, depositAmount }
+          : r
+      );
+      this.saveRooms(rooms);
+
+      this.addAuditLog({
+        actorRole: 'admin',
+        actorName,
+        action: 'PRICE_UPDATE',
+        target: properties[pIdx].name,
+        details: `Updated rates to RM ${priceMonth}/mo, RM ${priceSemester}/sem, Deposit RM ${depositAmount}`,
+      });
+    }
+  }
+
+  static bulkCreateRooms(
+    propertyId: string,
+    block: string,
+    floor: number,
+    startRoomIndex: number,
+    count: number,
+    roomType: string
+  ): { success: boolean; added: number; message: string } {
+    const properties = this.getProperties();
+    const prop = properties.find((p) => p.id === propertyId);
+    if (!prop) {
+      return { success: false, added: 0, message: 'Property not found.' };
+    }
+
+    const existingRooms = this.getRooms();
+    const existingNos = new Set(
+      existingRooms.filter((r) => r.propertyId === propertyId).map((r) => r.roomNo)
+    );
+
+    const created: RoomItem[] = [];
+    for (let i = 0; i < count; i++) {
+      const num = floor * 100 + startRoomIndex + i;
+      const roomNo = String(num);
+      if (existingNos.has(roomNo)) continue;
+
+      created.push({
+        id: `${prop.shortCode.toLowerCase()}-${roomNo}-${Date.now()}-${i}`,
+        propertyId: prop.id,
+        propertyName: prop.name,
+        campusId: prop.campusId,
+        roomNo,
+        floor,
+        block: block || 'Main Block',
+        roomType: roomType || prop.roomType,
+        category: 'kolej_room',
+        capacity: prop.bedType === 'Twin Bed' ? 2 : 1,
+        status: 'available',
+        priceMonth: prop.priceMonth,
+        priceSemester: prop.priceSemester,
+        depositAmount: prop.depositAmount,
+        bedType: prop.bedType,
+        features: ['Campus Wi-Fi', 'Study Desk', 'Wardrobe'],
+      });
+    }
+
+    if (created.length === 0) {
+      return {
+        success: false,
+        added: 0,
+        message: 'All generated room numbers already exist on this floor.',
+      };
+    }
+
+    const merged = [...existingRooms, ...created];
+    this.saveRooms(merged);
+
+    const freeCount = merged.filter(
+      (r) => r.propertyId === prop.id && r.status === 'available'
+    ).length;
+    const pIdx = properties.findIndex((p) => p.id === prop.id);
+    if (pIdx !== -1) {
+      properties[pIdx].availableUnits = freeCount;
+      properties[pIdx].totalUnits += created.length;
+      properties[pIdx].statusBadge = freeCount > 0 ? 'Available Now' : 'Waitlist Open';
+      this.saveProperties(properties);
+    }
+
+    this.addAuditLog({
+      actorRole: 'admin',
+      actorName: 'HEPA Housing Staff',
+      action: 'BULK_CREATE_ROOMS',
+      target: `${prop.name} • Floor ${floor}`,
+      details: `Added ${created.length} rooms (${created[0].roomNo}–${created[created.length - 1].roomNo})`,
+    });
+
+    return {
+      success: true,
+      added: created.length,
+      message: `Added ${created.length} rooms to ${prop.name} (Floor ${floor}).`,
+    };
+  }
+
+  static updateBookingStatus(
+    bookingId: string,
+    newStatus: BookingRecord['status'],
+    actorName: string = 'HEPA Housing Staff'
+  ): void {
+    const bookings = this.getBookings();
+    const idx = bookings.findIndex((b) => b.id === bookingId);
+    if (idx === -1) return;
+
+    const prevStatus = bookings[idx].status;
+    bookings[idx].status = newStatus;
+    this.saveBookings(bookings);
+
+    // If cancelled, release the specific room back to available
+    if (newStatus === 'cancelled' && bookings[idx].roomId) {
+      this.updateRoomStatus(bookings[idx].roomId!, 'available', 'admin', actorName);
+    }
+
+    this.addAuditLog({
+      actorRole: 'admin',
+      actorName,
+      action: 'BOOKING_STATUS_UPDATE',
+      target: bookings[idx].bookingCode,
+      details: `${bookings[idx].studentName} (${bookings[idx].studentMatric}): ${prevStatus} -> ${newStatus}`,
+    });
+  }
+
+  static promoteWaitlistEntry(
+    waitlistId: string,
+    actorName: string = 'HEPA Housing Staff'
+  ): void {
+    const list = this.getWaitlist();
+    const idx = list.findIndex((w) => w.id === waitlistId);
+    if (idx === -1) return;
+
+    list[idx].status = 'offered';
+    this.saveWaitlist(list);
+
+    this.addAuditLog({
+      actorRole: 'admin',
+      actorName,
+      action: 'WAITLIST_OFFER',
+      target: list[idx].propertyName,
+      details: `Offered room slot to ${list[idx].studentName} (${list[idx].studentMatric}) at position #${list[idx].position}`,
+    });
   }
 
   static bookSpecificRoom(
@@ -1550,11 +1756,70 @@ export class LocalDatabase {
     bookings.unshift(newBooking);
     this.saveBookings(bookings);
 
+    this.addAuditLog({
+      actorRole: 'system',
+      actorName: 'Booking Engine (Unique Lock)',
+      action: 'ROOM_BOOKED',
+      target: `${room.propertyName} • Room ${room.roomNo}`,
+      details: `Booked by ${CURRENT_STUDENT.fullName} (${CURRENT_STUDENT.matricNo}) via ${paymentMethod.split(' ')[0]}`,
+    });
+
     return {
       success: true,
       booking: newBooking,
       message: `Room ${room.roomNo} reserved! Reservation Code: ${newBooking.bookingCode}`,
     };
+  }
+
+  static getAuditLogs(): AuditLogEntry[] {
+    try {
+      const data = localStorage.getItem(`${STORAGE_KEY_PREFIX}_audit_logs`);
+      if (data) return JSON.parse(data);
+    } catch {
+      // fallback
+    }
+    return INITIAL_AUDIT_LOGS;
+  }
+
+  static addAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): void {
+    const logs = this.getAuditLogs();
+    const newEntry: AuditLogEntry = {
+      id: `aud-${Date.now()}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      ...entry,
+    };
+    logs.unshift(newEntry);
+    try {
+      localStorage.setItem(`${STORAGE_KEY_PREFIX}_audit_logs`, JSON.stringify(logs.slice(0, 100)));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  static exportRoomsCSV(): string {
+    const rooms = this.getRooms();
+    const header = 'property_id,property_name,block,unit_no,floor,room_no,room_type,capacity,price_month,price_semester,status';
+    const rows = rooms.map(
+      (r) =>
+        `"${r.propertyId}","${r.propertyName}","${r.block || ''}","${r.unitNo || ''}",${r.floor},"${r.roomNo}","${r.roomType}",${r.capacity},${r.priceMonth},${r.priceSemester},"${r.status}"`
+    );
+    return [header, ...rows].join('\n');
+  }
+
+  static exportDatabaseSnapshot(): string {
+    return JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        users: [CURRENT_STUDENT],
+        properties: this.getProperties(),
+        rooms: this.getRooms(),
+        bookings: this.getBookings(),
+        waitlist: this.getWaitlist(),
+        auditLogs: this.getAuditLogs(),
+      },
+      null,
+      2
+    );
   }
 
   static resetDatabase(): void {
@@ -1563,5 +1828,6 @@ export class LocalDatabase {
     localStorage.removeItem(`${STORAGE_KEY_PREFIX}_bookings`);
     localStorage.removeItem(`${STORAGE_KEY_PREFIX}_waitlist`);
     localStorage.removeItem(`${STORAGE_KEY_PREFIX}_wishlist`);
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX}_audit_logs`);
   }
 }

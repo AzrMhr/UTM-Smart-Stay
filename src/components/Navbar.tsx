@@ -5,48 +5,39 @@ import {
   X,
   Shield,
   FileText,
-  Database,
-  RotateCcw,
   CheckCircle2,
   Phone,
-  User,
-  Rocket,
+  LogOut,
   ChevronRight,
+  Building2,
 } from 'lucide-react';
-import { StudentUser, BookingRecord, WaitlistRecord } from '../types';
+import { StudentUser, BookingRecord, PortalRole } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
   student: StudentUser;
   bookings: BookingRecord[];
-  waitlist: WaitlistRecord[];
   activeTabLabel?: string;
-  onOpenDatabaseModal: () => void;
-  onOpenDeployModal: () => void;
-  onResetDatabase: () => void;
   onNavigateToTab: (tab: 'home' | 'map' | 'community' | 'messages') => void;
+  onSwitchPortal: (role: PortalRole) => void;
+  onSignOutStudent?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   student,
   bookings,
-  openDeployModal,
-  onOpenDatabaseModal,
-  onOpenDeployModal,
-  onResetDatabase,
+  activeTabLabel = 'Accommodations Marketplace',
   onNavigateToTab,
-  activeTabLabel = 'Accommodations Dashboard',
-}: NavbarProps & { openDeployModal?: () => void }) => {
+  onSwitchPortal,
+  onSignOutStudent,
+}) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [resetConfirm, setResetConfirm] = useState(false);
-
-  const handleOpenDeploy = onOpenDeployModal || openDeployModal || (() => {});
 
   return (
     <>
       <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md shadow-xs border-b border-slate-200/80 transition-all">
-        {/* Mobile Header (< lg): Exact 3-part layout (Hamburger Left, "UTM Smart Stay" Center, Bell + Avatar Right) */}
+        {/* Mobile Header (< lg): Exact 3-part layout */}
         <div className="lg:hidden px-4 h-14 flex items-center justify-between">
           {/* Left side: Hamburger menu icon */}
           <button
@@ -71,9 +62,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
 
-          {/* Right side: User profile avatar and notification bell with red dot */}
+          {/* Right side: Notification bell with red dot + Profile avatar */}
           <div className="flex items-center gap-2">
-            {/* Notification Bell */}
             <div className="relative">
               <button
                 type="button"
@@ -86,7 +76,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
 
-            {/* Profile Avatar */}
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -106,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Desktop Header (>= lg): Breadcrumb Left, Action Buttons & Profile Right */}
+        {/* Desktop Header (>= lg): Clean Breadcrumb Left, PWA Install & Student Profile Right */}
         <div className="hidden lg:flex items-center justify-between px-8 h-16 max-w-7xl mx-auto">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span
@@ -122,25 +111,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-3">
             <PWAInstallButton variant="compact" />
 
-            <button
-              type="button"
-              onClick={handleOpenDeploy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-colors cursor-pointer"
-            >
-              <Rocket className="w-3.5 h-3.5 text-[#800000]" />
-              <span>Deploy Guide</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenDatabaseModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-colors cursor-pointer"
-            >
-              <Database className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Live DB</span>
-            </button>
-
-            {/* Notification Bell */}
             <div className="relative">
               <button
                 type="button"
@@ -153,7 +123,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
 
-            {/* Student Pill */}
             <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
               <img
                 src={student.avatarUrl}
@@ -192,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="text-[10px] text-slate-400 font-normal">10:45 AM</span>
                 </div>
                 <p className="text-[11px] text-slate-600 mt-1 line-clamp-2">
-                  Deposit RM 200 for KTDI confirmed for Azraf Mahir (A24MJ3028).
+                  Deposit RM 200 for KTDI confirmed for {student.fullName} ({student.matricNo}).
                 </p>
               </div>
 
@@ -216,7 +185,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </header>
 
-      {/* Mobile Slide-out Navigation Drawer */}
+      {/* Mobile Slide-out Navigation Drawer (Strictly Student-Facing) */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div
@@ -274,7 +243,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
 
               <div className="px-3 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Accommodation Management
+                Student Housing Menu
               </div>
 
               <button
@@ -287,7 +256,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="w-4 h-4 text-[#800000]" />
-                  <span className="font-medium text-slate-800">My Bookings &amp; Applications</span>
+                  <span className="font-medium text-slate-800">My Bookings &amp; Waitlist</span>
                 </div>
                 <span className="text-xs bg-red-50 text-[#800000] font-bold px-2 py-0.5 rounded-full">
                   {bookings.length}
@@ -318,69 +287,44 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="font-medium text-slate-800">Roommate Matching Board</span>
               </button>
 
-              <div className="pt-3 px-3 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Deployment &amp; Database Tools
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDrawerOpen(false);
-                  handleOpenDeploy();
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-50/50 hover:bg-red-50 transition-colors text-left border border-red-100"
-              >
-                <Rocket className="w-4 h-4 text-[#800000]" />
-                <div>
-                  <span className="font-semibold text-slate-800 block">
-                    Deployment &amp; PWA Guide
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    Vercel &amp; GitHub Pages instructions
-                  </span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setDrawerOpen(false);
-                  onOpenDatabaseModal();
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors text-left border border-slate-200"
-              >
-                <Database className="w-4 h-4 text-emerald-600" />
-                <div>
-                  <span className="font-semibold text-slate-800 block">Database Inspector</span>
-                  <span className="text-[11px] text-slate-500">
-                    View real-time records &amp; inventory
-                  </span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (resetConfirm) {
-                    onResetDatabase();
-                    setResetConfirm(false);
+              {onSignOutStudent && (
+                <button
+                  type="button"
+                  onClick={() => {
                     setDrawerOpen(false);
-                  } else {
-                    setResetConfirm(true);
-                  }
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-rose-700 hover:bg-rose-50 transition-colors text-left"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span className="font-medium">
-                  {resetConfirm ? 'Click again to confirm reset' : 'Reset Database to Seed State'}
-                </span>
-              </button>
+                    onSignOutStudent();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-600 transition-colors text-left"
+                >
+                  <LogOut className="w-4 h-4 text-slate-500" />
+                  <span className="font-medium">Sign Out / Switch Student</span>
+                </button>
+              )}
+
+              <div className="pt-4 mt-4 border-t border-slate-100">
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Staff Access
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    onSwitchPortal('admin');
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-50 text-slate-600 text-xs font-semibold text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <Building2 className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Housing Management Portal</span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+              </div>
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 text-center text-xs text-slate-400">
-              <p className="font-semibold text-slate-600">SCSE2243 Application Development I</p>
-              <p className="text-[11px] mt-0.5">UTM MJIIT • Standalone Student Housing Hub</p>
+              <p className="font-semibold text-slate-600">UTM Smart Stay</p>
+              <p className="text-[11px] mt-0.5">Independent Student Accommodation Platform</p>
             </div>
           </aside>
         </div>

@@ -166,3 +166,16 @@ export interface PointOfInterest {
   y: number; // percentage on map diagram
   description: string;
 }
+
+export type PortalRole = 'student' | 'admin' | 'sysadmin';
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actorRole: 'admin' | 'sysadmin' | 'system';
+  actorName: string;
+  action: string;
+  target: string;
+  details: string;
+}
+
