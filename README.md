@@ -73,7 +73,7 @@
 
 ---
 
-### SUBSYSTEM 2 : TANJIM RAHMAN
+### SUBSYSTEM 2 : Tanjim Arup
 
 <table>
   <thead>
