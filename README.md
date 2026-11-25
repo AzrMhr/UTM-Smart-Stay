@@ -136,7 +136,7 @@
 
 ---
 
-### SUBSYSTEM 3 : YAHYA AL-HUSSEINI
+### SUBSYSTEM 3 : Yahya Waleed
 
 <table>
   <thead>
@@ -195,7 +195,7 @@
 
 ---
 
-### SUBSYSTEM 4 : KARIM BIN ROSLAN
+### SUBSYSTEM 4 : AbdulKarim Malek
 
 <table>
   <thead>
